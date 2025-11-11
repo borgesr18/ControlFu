@@ -359,13 +359,15 @@ function App() {
       <div className="container mx-auto p-6">
         <div className="mb-8 flex items-center justify-between">
           <div>
-            <h1 className="text-4xl font-bold text-white mb-2">Sistema de Apostas Esportivas</h1>
-            <p className="text-slate-300">Controle completo das suas apostas de futebol</p>
+            <h1 className="text-5xl font-bold bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 bg-clip-text text-transparent mb-3 animate-pulse">
+              Sistema de Apostas Esportivas
+            </h1>
+            <p className="text-slate-300 text-lg">⚽ Controle completo das suas apostas de futebol</p>
           </div>
           <Button 
             onClick={handleLogout}
             variant="outline"
-            className="bg-slate-800 border-slate-600 text-slate-200 hover:bg-slate-700 hover:text-white"
+            className="bg-gradient-to-r from-red-500/20 to-pink-500/20 border-red-500/30 text-red-200 hover:bg-red-500/30 hover:text-white hover:scale-105 transition-all duration-200 shadow-lg hover:shadow-red-500/50"
           >
             <LogOut className="w-4 h-4 mr-2" />
             Sair
@@ -373,58 +375,80 @@ function App() {
         </div>
 
         <Tabs defaultValue="dashboard" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-4 bg-slate-800">
-            <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
-            <TabsTrigger value="matches">Partidas</TabsTrigger>
-            <TabsTrigger value="bets">Apostas</TabsTrigger>
-            <TabsTrigger value="statistics">Estatísticas</TabsTrigger>
+          <TabsList className="grid w-full grid-cols-4 bg-gradient-to-r from-slate-800/80 to-slate-900/80 backdrop-blur-sm p-1 rounded-xl border border-slate-700/50 shadow-xl">
+            <TabsTrigger value="dashboard" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-500 data-[state=active]:to-purple-500 data-[state=active]:text-white data-[state=active]:shadow-lg transition-all duration-200">
+              Dashboard
+            </TabsTrigger>
+            <TabsTrigger value="matches" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-green-500 data-[state=active]:to-emerald-500 data-[state=active]:text-white data-[state=active]:shadow-lg transition-all duration-200">
+              Partidas
+            </TabsTrigger>
+            <TabsTrigger value="bets" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-amber-500 data-[state=active]:to-orange-500 data-[state=active]:text-white data-[state=active]:shadow-lg transition-all duration-200">
+              Apostas
+            </TabsTrigger>
+            <TabsTrigger value="statistics" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-purple-500 data-[state=active]:to-pink-500 data-[state=active]:text-white data-[state=active]:shadow-lg transition-all duration-200">
+              Estatísticas
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="dashboard" className="space-y-6">
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-              <Card className="bg-slate-800 border-slate-700">
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+              <Card className="bg-gradient-to-br from-blue-500/10 to-blue-600/5 border-blue-500/20 backdrop-blur-sm hover:shadow-lg hover:shadow-blue-500/20 transition-all duration-300 hover:scale-105">
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium text-slate-200">Total Apostado</CardTitle>
-                  <DollarSign className="h-4 w-4 text-slate-400" />
+                  <CardTitle className="text-sm font-medium text-blue-100">Total Apostado</CardTitle>
+                  <div className="p-2 bg-blue-500/20 rounded-lg">
+                    <DollarSign className="h-5 w-5 text-blue-400" />
+                  </div>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold text-white">R$ {statistics?.total_stake.toFixed(2) || '0.00'}</div>
+                  <div className="text-3xl font-bold bg-gradient-to-r from-blue-400 to-blue-600 bg-clip-text text-transparent">
+                    R$ {statistics?.total_stake.toFixed(2) || '0.00'}
+                  </div>
                 </CardContent>
               </Card>
 
-              <Card className="bg-slate-800 border-slate-700">
+              <Card className={`${statistics && statistics.profit_loss >= 0 ? 'bg-gradient-to-br from-green-500/10 to-emerald-600/5 border-green-500/20 hover:shadow-green-500/20' : 'bg-gradient-to-br from-red-500/10 to-rose-600/5 border-red-500/20 hover:shadow-red-500/20'} backdrop-blur-sm hover:shadow-lg transition-all duration-300 hover:scale-105`}>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium text-slate-200">Lucro/Prejuízo</CardTitle>
-                  {statistics && statistics.profit_loss >= 0 ? (
-                    <TrendingUp className="h-4 w-4 text-green-500" />
-                  ) : (
-                    <TrendingDown className="h-4 w-4 text-red-500" />
-                  )}
+                  <CardTitle className={`text-sm font-medium ${statistics && statistics.profit_loss >= 0 ? 'text-green-100' : 'text-red-100'}`}>
+                    Lucro/Prejuízo
+                  </CardTitle>
+                  <div className={`p-2 rounded-lg ${statistics && statistics.profit_loss >= 0 ? 'bg-green-500/20' : 'bg-red-500/20'}`}>
+                    {statistics && statistics.profit_loss >= 0 ? (
+                      <TrendingUp className="h-5 w-5 text-green-400" />
+                    ) : (
+                      <TrendingDown className="h-5 w-5 text-red-400" />
+                    )}
+                  </div>
                 </CardHeader>
                 <CardContent>
-                  <div className={`text-2xl font-bold ${statistics && statistics.profit_loss >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                  <div className={`text-3xl font-bold ${statistics && statistics.profit_loss >= 0 ? 'bg-gradient-to-r from-green-400 to-emerald-600 bg-clip-text text-transparent' : 'bg-gradient-to-r from-red-400 to-rose-600 bg-clip-text text-transparent'}`}>
                     R$ {statistics?.profit_loss.toFixed(2) || '0.00'}
                   </div>
                 </CardContent>
               </Card>
 
-              <Card className="bg-slate-800 border-slate-700">
+              <Card className="bg-gradient-to-br from-purple-500/10 to-purple-600/5 border-purple-500/20 backdrop-blur-sm hover:shadow-lg hover:shadow-purple-500/20 transition-all duration-300 hover:scale-105">
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium text-slate-200">Taxa de Acerto</CardTitle>
-                  <Target className="h-4 w-4 text-slate-400" />
+                  <CardTitle className="text-sm font-medium text-purple-100">Taxa de Acerto</CardTitle>
+                  <div className="p-2 bg-purple-500/20 rounded-lg">
+                    <Target className="h-5 w-5 text-purple-400" />
+                  </div>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold text-white">{statistics?.win_rate.toFixed(1) || '0.0'}%</div>
+                  <div className="text-3xl font-bold bg-gradient-to-r from-purple-400 to-purple-600 bg-clip-text text-transparent">
+                    {statistics?.win_rate.toFixed(1) || '0.0'}%
+                  </div>
                 </CardContent>
               </Card>
 
-              <Card className="bg-slate-800 border-slate-700">
+              <Card className={`${statistics && statistics.roi >= 0 ? 'bg-gradient-to-br from-amber-500/10 to-yellow-600/5 border-amber-500/20 hover:shadow-amber-500/20' : 'bg-gradient-to-br from-orange-500/10 to-red-600/5 border-orange-500/20 hover:shadow-orange-500/20'} backdrop-blur-sm hover:shadow-lg transition-all duration-300 hover:scale-105`}>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium text-slate-200">ROI</CardTitle>
-                  <Trophy className="h-4 w-4 text-slate-400" />
+                  <CardTitle className={`text-sm font-medium ${statistics && statistics.roi >= 0 ? 'text-amber-100' : 'text-orange-100'}`}>ROI</CardTitle>
+                  <div className={`p-2 rounded-lg ${statistics && statistics.roi >= 0 ? 'bg-amber-500/20' : 'bg-orange-500/20'}`}>
+                    <Trophy className={`h-5 w-5 ${statistics && statistics.roi >= 0 ? 'text-amber-400' : 'text-orange-400'}`} />
+                  </div>
                 </CardHeader>
                 <CardContent>
-                  <div className={`text-2xl font-bold ${statistics && statistics.roi >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                  <div className={`text-3xl font-bold ${statistics && statistics.roi >= 0 ? 'bg-gradient-to-r from-amber-400 to-yellow-600 bg-clip-text text-transparent' : 'bg-gradient-to-r from-orange-400 to-red-600 bg-clip-text text-transparent'}`}>
                     {statistics?.roi.toFixed(1) || '0.0'}%
                   </div>
                 </CardContent>
@@ -432,9 +456,11 @@ function App() {
             </div>
 
             <div className="grid gap-6 md:grid-cols-2">
-              <Card className="bg-slate-800 border-slate-700">
+              <Card className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 border-slate-700/50 backdrop-blur-sm hover:shadow-xl hover:shadow-purple-500/10 transition-all duration-300">
                 <CardHeader>
-                  <CardTitle className="text-white">Distribuição de Apostas</CardTitle>
+                  <CardTitle className="text-2xl font-bold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
+                    Distribuição de Apostas
+                  </CardTitle>
                 </CardHeader>
                 <CardContent>
                   <ResponsiveContainer width="100%" height={300}>
@@ -445,7 +471,7 @@ function App() {
                         cy="50%"
                         labelLine={false}
                         label={({ name, value }) => `${name}: ${value}`}
-                        outerRadius={80}
+                        outerRadius={90}
                         fill="#8884d8"
                         dataKey="value"
                       >
@@ -459,36 +485,44 @@ function App() {
                 </CardContent>
               </Card>
 
-              <Card className="bg-slate-800 border-slate-700">
+              <Card className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 border-slate-700/50 backdrop-blur-sm hover:shadow-xl hover:shadow-blue-500/10 transition-all duration-300">
                 <CardHeader>
-                  <CardTitle className="text-white">Resumo de Apostas</CardTitle>
+                  <CardTitle className="text-2xl font-bold bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">
+                    Resumo de Apostas
+                  </CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Trophy className="h-5 w-5 text-green-500" />
-                        <span className="text-slate-200">Apostas Ganhas</span>
+                    <div className="flex items-center justify-between p-3 rounded-lg bg-green-500/10 border border-green-500/20 hover:bg-green-500/20 transition-all duration-200">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 bg-green-500/20 rounded-lg">
+                          <Trophy className="h-5 w-5 text-green-400" />
+                        </div>
+                        <span className="text-slate-200 font-medium">Apostas Ganhas</span>
                       </div>
-                      <span className="text-xl font-bold text-white">{statistics?.won_bets || 0}</span>
+                      <span className="text-2xl font-bold text-green-400">{statistics?.won_bets || 0}</span>
                     </div>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <XCircle className="h-5 w-5 text-red-500" />
-                        <span className="text-slate-200">Apostas Perdidas</span>
+                    <div className="flex items-center justify-between p-3 rounded-lg bg-red-500/10 border border-red-500/20 hover:bg-red-500/20 transition-all duration-200">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 bg-red-500/20 rounded-lg">
+                          <XCircle className="h-5 w-5 text-red-400" />
+                        </div>
+                        <span className="text-slate-200 font-medium">Apostas Perdidas</span>
                       </div>
-                      <span className="text-xl font-bold text-white">{statistics?.lost_bets || 0}</span>
+                      <span className="text-2xl font-bold text-red-400">{statistics?.lost_bets || 0}</span>
                     </div>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Clock className="h-5 w-5 text-yellow-500" />
-                        <span className="text-slate-200">Apostas Pendentes</span>
+                    <div className="flex items-center justify-between p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/20 hover:bg-yellow-500/20 transition-all duration-200">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 bg-yellow-500/20 rounded-lg">
+                          <Clock className="h-5 w-5 text-yellow-400" />
+                        </div>
+                        <span className="text-slate-200 font-medium">Apostas Pendentes</span>
                       </div>
-                      <span className="text-xl font-bold text-white">{statistics?.pending_bets || 0}</span>
+                      <span className="text-2xl font-bold text-yellow-400">{statistics?.pending_bets || 0}</span>
                     </div>
-                    <div className="flex items-center justify-between pt-4 border-t border-slate-700">
-                      <span className="text-slate-200 font-semibold">Total de Apostas</span>
-                      <span className="text-xl font-bold text-white">{statistics?.total_bets || 0}</span>
+                    <div className="flex items-center justify-between p-3 rounded-lg bg-gradient-to-r from-blue-500/10 to-purple-500/10 border border-blue-500/20 mt-2">
+                      <span className="text-slate-100 font-semibold text-lg">Total de Apostas</span>
+                      <span className="text-2xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">{statistics?.total_bets || 0}</span>
                     </div>
                   </div>
                 </CardContent>
