@@ -63,6 +63,7 @@ function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [loginPassword, setLoginPassword] = useState('')
   const [loginError, setLoginError] = useState('')
+  const [isLoading, setIsLoading] = useState(false)
   const [matches, setMatches] = useState<Match[]>([])
   const [bets, setBets] = useState<Bet[]>([])
   const [statistics, setStatistics] = useState<Statistics | null>(null)
@@ -90,6 +91,8 @@ function App() {
   })
 
   useEffect(() => {
+    fetch(`${API_URL}/healthz`).catch(() => {})
+    
     const authStatus = sessionStorage.getItem('authenticated')
     if (authStatus === 'true') {
       setIsAuthenticated(true)
@@ -98,9 +101,15 @@ function App() {
 
   useEffect(() => {
     if (!isAuthenticated) return
-    fetchMatches()
-    fetchBets()
-    fetchStatistics()
+    
+    setIsLoading(true)
+    Promise.all([
+      fetchMatches(),
+      fetchBets(),
+      fetchStatistics()
+    ]).finally(() => {
+      setIsLoading(false)
+    })
   }, [isAuthenticated])
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -326,6 +335,24 @@ function App() {
     { name: 'Perdidas', value: statistics.lost_bets, color: '#ef4444' },
     { name: 'Pendentes', value: statistics.pending_bets, color: '#eab308' }
   ] : []
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center">
+        <Card className="w-full max-w-md bg-slate-800 border-slate-700">
+          <CardContent className="pt-6">
+            <div className="flex flex-col items-center space-y-4">
+              <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+              <div className="text-center">
+                <p className="text-xl font-semibold text-white">Carregando dados...</p>
+                <p className="text-sm text-slate-400 mt-2">Aguarde enquanto conectamos ao servidor</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
