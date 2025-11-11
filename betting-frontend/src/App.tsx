@@ -34,16 +34,28 @@ interface Match {
   league: string
 }
 
-interface Bet {
+interface BetSelection {
   id?: number
+  bet_id?: number
   match_id: number
   bet_type: string
+  odds: number
+  status: string
+  created_at?: string
+}
+
+interface Bet {
+  id?: number
+  match_id?: number | null
+  bet_type?: string | null
   odds: number
   stake: number
   status: string
   potential_return?: number
   actual_return?: number | null
   notes?: string
+  is_composite?: boolean
+  selections?: BetSelection[]
   created_at?: string
 }
 
@@ -69,10 +81,14 @@ function App() {
   const [statistics, setStatistics] = useState<Statistics | null>(null)
   const [isMatchDialogOpen, setIsMatchDialogOpen] = useState(false)
   const [isBetDialogOpen, setIsBetDialogOpen] = useState(false)
+  const [isCompositeBetDialogOpen, setIsCompositeBetDialogOpen] = useState(false)
   const [isEditMatchDialogOpen, setIsEditMatchDialogOpen] = useState(false)
   const [isEditBetDialogOpen, setIsEditBetDialogOpen] = useState(false)
   const [selectedMatch, setSelectedMatch] = useState<Match | null>(null)
   const [selectedBet, setSelectedBet] = useState<Bet | null>(null)
+  const [compositeBetSelections, setCompositeBetSelections] = useState<BetSelection[]>([])
+  const [compositeBetStake, setCompositeBetStake] = useState(0)
+  const [compositeBetNotes, setCompositeBetNotes] = useState('')
 
   const [newMatch, setNewMatch] = useState<Match>({
     home_team: '',
@@ -271,6 +287,52 @@ function App() {
     } catch (error) {
       console.error('Error creating bet:', error)
     }
+  }
+
+  const createCompositeBet = async () => {
+    if (compositeBetSelections.length < 2) {
+      alert('Aposta composta deve ter pelo menos 2 seleções')
+      return
+    }
+    try {
+      const response = await fetch(`${API_URL}/bets/composite`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          stake: compositeBetStake,
+          notes: compositeBetNotes,
+          selections: compositeBetSelections
+        })
+      })
+      if (response.ok) {
+        fetchBets()
+        fetchStatistics()
+        setIsCompositeBetDialogOpen(false)
+        setCompositeBetSelections([])
+        setCompositeBetStake(0)
+        setCompositeBetNotes('')
+      }
+    } catch (error) {
+      console.error('Error creating composite bet:', error)
+    }
+  }
+
+  const addSelectionToCompositeBet = (matchId: number, betType: string, odds: number) => {
+    setCompositeBetSelections([...compositeBetSelections, {
+      match_id: matchId,
+      bet_type: betType,
+      odds: odds,
+      status: 'pending'
+    }])
+  }
+
+  const removeSelectionFromCompositeBet = (index: number) => {
+    setCompositeBetSelections(compositeBetSelections.filter((_, i) => i !== index))
+  }
+
+  const calculateCombinedOdds = () => {
+    if (compositeBetSelections.length === 0) return 0
+    return compositeBetSelections.reduce((acc, sel) => acc * sel.odds, 1)
   }
 
   const updateBet = async () => {
@@ -731,13 +793,14 @@ function App() {
           <TabsContent value="bets" className="space-y-6 animate-in fade-in duration-500">
             <div className="flex justify-between items-center">
               <h2 className="text-2xl font-bold text-gray-900">Gerenciar Apostas</h2>
-              <Dialog open={isBetDialogOpen} onOpenChange={setIsBetDialogOpen}>
-                <DialogTrigger asChild>
-                  <Button className="bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-700 hover:to-green-700 shadow-lg hover:shadow-xl transition-all duration-300 h-11 px-6 font-semibold">
-                    <Plus className="w-5 h-5 mr-2" />
-                    Nova Aposta
-                  </Button>
-                </DialogTrigger>
+              <div className="flex gap-3">
+                <Dialog open={isBetDialogOpen} onOpenChange={setIsBetDialogOpen}>
+                  <DialogTrigger asChild>
+                    <Button className="bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-700 hover:to-green-700 shadow-lg hover:shadow-xl transition-all duration-300 h-11 px-6 font-semibold">
+                      <Plus className="w-5 h-5 mr-2" />
+                      Nova Aposta
+                    </Button>
+                  </DialogTrigger>
                 <DialogContent className="bg-white border-0 shadow-2xl max-w-md">
                   <DialogHeader>
                     <DialogTitle className="text-2xl font-bold text-gray-900">Criar Nova Aposta</DialogTitle>
@@ -807,6 +870,133 @@ function App() {
                   </DialogFooter>
                 </DialogContent>
               </Dialog>
+              
+              <Dialog open={isCompositeBetDialogOpen} onOpenChange={setIsCompositeBetDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 shadow-lg hover:shadow-xl transition-all duration-300 h-11 px-6 font-semibold">
+                    <Plus className="w-5 h-5 mr-2" />
+                    Aposta Composta
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="bg-white border-0 shadow-2xl max-w-2xl max-h-[90vh] overflow-y-auto">
+                  <DialogHeader>
+                    <DialogTitle className="text-2xl font-bold text-gray-900">Criar Aposta Composta</DialogTitle>
+                    <DialogDescription className="text-gray-600">
+                      Combine múltiplas partidas. Todas devem ganhar para receber o retorno.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="grid gap-4 py-4">
+                    <div className="grid gap-2">
+                      <Label className="text-gray-700 font-medium">Adicionar Partidas</Label>
+                      <div className="text-xs text-gray-600 mb-2">Selecione pelo menos 2 partidas para criar uma aposta composta</div>
+                      <div className="space-y-2 max-h-64 overflow-y-auto border border-gray-200 rounded-lg p-2">
+                        {matches.map((match) => (
+                          <div key={match.id} className="p-3 bg-white rounded-lg border border-gray-200 hover:border-purple-300 transition-colors">
+                            <div className="flex items-center justify-between mb-2">
+                              <p className="text-sm font-medium text-gray-900">{match.home_team} vs {match.away_team}</p>
+                              <Badge className="bg-blue-100 text-blue-700 text-xs">{match.league}</Badge>
+                            </div>
+                            <div className="grid grid-cols-3 gap-2">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => addSelectionToCompositeBet(match.id!, 'home_win', 1.8)}
+                                className="h-8 text-xs border-gray-300 hover:bg-purple-50 hover:border-purple-300"
+                              >
+                                Casa 1.8
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => addSelectionToCompositeBet(match.id!, 'draw', 3.2)}
+                                className="h-8 text-xs border-gray-300 hover:bg-purple-50 hover:border-purple-300"
+                              >
+                                Empate 3.2
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => addSelectionToCompositeBet(match.id!, 'away_win', 2.1)}
+                                className="h-8 text-xs border-gray-300 hover:bg-purple-50 hover:border-purple-300"
+                              >
+                                Fora 2.1
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {compositeBetSelections.length > 0 && (
+                      <>
+                        <div className="grid gap-2">
+                          <Label className="text-gray-700 font-medium">Seleções Adicionadas ({compositeBetSelections.length})</Label>
+                          <div className="space-y-2">
+                            {compositeBetSelections.map((selection, index) => (
+                              <div key={index} className="flex items-center justify-between p-3 bg-gradient-to-r from-purple-50 to-pink-50 rounded-lg border border-purple-200">
+                                <div className="flex-1">
+                                  <p className="text-sm font-medium text-gray-900">{getMatchName(selection.match_id)}</p>
+                                  <p className="text-xs text-gray-600">{betTypeLabels[selection.bet_type]} - Odds: {selection.odds.toFixed(2)}</p>
+                                </div>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => removeSelectionFromCompositeBet(index)}
+                                  className="h-8 border-red-200 text-red-600 hover:bg-red-50"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </Button>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="p-4 bg-gradient-to-r from-purple-100 to-pink-100 rounded-lg border-2 border-purple-300">
+                          <p className="text-sm font-medium text-gray-700 mb-2">Odds Combinadas (Multiplicadas)</p>
+                          <p className="text-4xl font-bold text-purple-700">{calculateCombinedOdds().toFixed(2)}</p>
+                          {compositeBetStake > 0 && (
+                            <p className="text-sm text-gray-700 mt-2">
+                              Retorno Potencial: <span className="font-bold text-emerald-700">R$ {(compositeBetStake * calculateCombinedOdds()).toFixed(2)}</span>
+                            </p>
+                          )}
+                        </div>
+                      </>
+                    )}
+
+                    <div className="grid gap-2">
+                      <Label htmlFor="composite_stake" className="text-gray-700 font-medium">Valor Apostado (R$)</Label>
+                      <Input
+                        id="composite_stake"
+                        type="number"
+                        step="0.01"
+                        value={compositeBetStake}
+                        onChange={(e) => setCompositeBetStake(parseFloat(e.target.value) || 0)}
+                        className="h-11 border-gray-300 focus:border-purple-500 focus:ring-purple-500"
+                        placeholder="Digite o valor da aposta"
+                      />
+                    </div>
+
+                    <div className="grid gap-2">
+                      <Label htmlFor="composite_notes" className="text-gray-700 font-medium">Notas (opcional)</Label>
+                      <Input
+                        id="composite_notes"
+                        value={compositeBetNotes}
+                        onChange={(e) => setCompositeBetNotes(e.target.value)}
+                        className="h-11 border-gray-300 focus:border-purple-500 focus:ring-purple-500"
+                        placeholder="Adicione observações sobre esta aposta"
+                      />
+                    </div>
+                  </div>
+                  <DialogFooter>
+                    <Button 
+                      onClick={createCompositeBet} 
+                      disabled={compositeBetSelections.length < 2}
+                      className="w-full h-11 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 font-semibold disabled:opacity-50"
+                    >
+                      Criar Aposta Composta ({compositeBetSelections.length} seleções)
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
             </div>
 
             <Card className="bg-white border-0 shadow-lg overflow-hidden">
@@ -815,7 +1005,7 @@ function App() {
                   <Table>
                     <TableHeader>
                       <TableRow className="bg-gradient-to-r from-gray-50 to-gray-100 border-b-2 border-gray-200">
-                        <TableHead className="text-gray-700 font-semibold">Partida</TableHead>
+                        <TableHead className="text-gray-700 font-semibold">Partida(s)</TableHead>
                         <TableHead className="text-gray-700 font-semibold">Tipo</TableHead>
                         <TableHead className="text-gray-700 font-semibold">Odds</TableHead>
                         <TableHead className="text-gray-700 font-semibold">Valor</TableHead>
@@ -827,8 +1017,31 @@ function App() {
                     <TableBody>
                       {bets.map((bet) => (
                         <TableRow key={bet.id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors duration-200">
-                          <TableCell className="text-gray-900 font-medium">{getMatchName(bet.match_id)}</TableCell>
-                          <TableCell className="text-gray-700">{betTypeLabels[bet.bet_type]}</TableCell>
+                          <TableCell className="text-gray-900 font-medium">
+                            {bet.is_composite ? (
+                              <div>
+                                <Badge className="bg-purple-100 text-purple-700 border-purple-200 mb-1">COMPOSTA</Badge>
+                                <div className="text-xs text-gray-600">
+                                  {bet.selections?.map((sel, idx) => (
+                                    <div key={idx}>{getMatchName(sel.match_id)}</div>
+                                  ))}
+                                </div>
+                              </div>
+                            ) : (
+                              getMatchName(bet.match_id!)
+                            )}
+                          </TableCell>
+                          <TableCell className="text-gray-700">
+                            {bet.is_composite ? (
+                              <div className="text-xs">
+                                {bet.selections?.map((sel, idx) => (
+                                  <div key={idx}>{betTypeLabels[sel.bet_type]}</div>
+                                ))}
+                              </div>
+                            ) : (
+                              betTypeLabels[bet.bet_type!]
+                            )}
+                          </TableCell>
                           <TableCell className="text-gray-900 font-bold">{bet.odds.toFixed(2)}</TableCell>
                           <TableCell className="text-gray-900 font-medium">R$ {bet.stake.toFixed(2)}</TableCell>
                           <TableCell className="text-emerald-600 font-bold">R$ {bet.potential_return?.toFixed(2) || '0.00'}</TableCell>

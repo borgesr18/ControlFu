@@ -57,17 +57,33 @@ class Match(BaseModel):
     status: MatchStatus = MatchStatus.SCHEDULED
     league: str
 
-class Bet(BaseModel):
+class BetSelection(BaseModel):
     id: Optional[int] = None
+    bet_id: Optional[int] = None
     match_id: int
     bet_type: BetType
+    odds: float
+    status: BetStatus = BetStatus.PENDING
+    created_at: Optional[str] = None
+
+class Bet(BaseModel):
+    id: Optional[int] = None
+    match_id: Optional[int] = None
+    bet_type: Optional[BetType] = None
     odds: float
     stake: float
     status: BetStatus = BetStatus.PENDING
     potential_return: Optional[float] = None
     actual_return: Optional[float] = None
     notes: Optional[str] = None
+    is_composite: bool = False
+    selections: Optional[List[BetSelection]] = None
     created_at: Optional[str] = None
+
+class CompositeBetCreate(BaseModel):
+    stake: float
+    notes: Optional[str] = None
+    selections: List[BetSelection]
 
 class Statistics(BaseModel):
     total_bets: int
@@ -151,6 +167,55 @@ async def delete_match(match_id: int):
             conn.commit()
             return {"message": "Match deleted"}
 
+@app.post("/bets/composite", response_model=Bet)
+async def create_composite_bet(composite_bet: CompositeBetCreate):
+    if len(composite_bet.selections) < 2:
+        raise HTTPException(status_code=400, detail="Composite bet must have at least 2 selections")
+    
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            for selection in composite_bet.selections:
+                cur.execute("SELECT id FROM matches WHERE id = %s", (selection.match_id,))
+                if not cur.fetchone():
+                    raise HTTPException(status_code=404, detail=f"Match {selection.match_id} not found")
+            
+            combined_odds = 1.0
+            for selection in composite_bet.selections:
+                combined_odds *= selection.odds
+            
+            potential_return = float(composite_bet.stake) * combined_odds
+            
+            cur.execute("""
+                INSERT INTO bets (bet_type, odds, stake, status, potential_return, actual_return, notes, is_composite)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                RETURNING id, match_id, bet_type, odds, stake, status, potential_return, actual_return, notes, is_composite, created_at
+            """, (None, combined_odds, composite_bet.stake, BetStatus.PENDING, 
+                  potential_return, None, composite_bet.notes, True))
+            bet_row = cur.fetchone()
+            bet_id = bet_row['id']
+            
+            selections_data = []
+            for selection in composite_bet.selections:
+                cur.execute("""
+                    INSERT INTO bet_selections (bet_id, match_id, bet_type, odds, status)
+                    VALUES (%s, %s, %s, %s, %s)
+                    RETURNING id, bet_id, match_id, bet_type, odds, status, created_at
+                """, (bet_id, selection.match_id, selection.bet_type, selection.odds, BetStatus.PENDING))
+                sel_row = cur.fetchone()
+                sel_row['odds'] = float(sel_row['odds'])
+                sel_row['created_at'] = sel_row['created_at'].isoformat()
+                selections_data.append(BetSelection(**sel_row))
+            
+            conn.commit()
+            
+            bet_row['odds'] = float(bet_row['odds'])
+            bet_row['stake'] = float(bet_row['stake'])
+            bet_row['potential_return'] = float(bet_row['potential_return']) if bet_row['potential_return'] else None
+            bet_row['actual_return'] = float(bet_row['actual_return']) if bet_row['actual_return'] else None
+            bet_row['created_at'] = bet_row['created_at'].isoformat()
+            bet_row['selections'] = selections_data
+            return Bet(**bet_row)
+
 @app.post("/bets", response_model=Bet)
 async def create_bet(bet: Bet):
     with get_conn() as conn:
@@ -168,11 +233,11 @@ async def create_bet(bet: Bet):
                 actual_return = 0.0
             
             cur.execute("""
-                INSERT INTO bets (match_id, bet_type, odds, stake, status, potential_return, actual_return, notes)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-                RETURNING id, match_id, bet_type, odds, stake, status, potential_return, actual_return, notes, created_at
+                INSERT INTO bets (match_id, bet_type, odds, stake, status, potential_return, actual_return, notes, is_composite)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                RETURNING id, match_id, bet_type, odds, stake, status, potential_return, actual_return, notes, is_composite, created_at
             """, (bet.match_id, bet.bet_type, bet.odds, bet.stake, bet.status, 
-                  potential_return, actual_return, bet.notes))
+                  potential_return, actual_return, bet.notes, False))
             row = cur.fetchone()
             conn.commit()
             
@@ -187,21 +252,38 @@ async def create_bet(bet: Bet):
 async def list_bets():
     with get_conn() as conn:
         with conn.cursor() as cur:
-            cur.execute("SELECT id, match_id, bet_type, odds, stake, status, potential_return, actual_return, notes, created_at FROM bets ORDER BY created_at DESC")
+            cur.execute("SELECT id, match_id, bet_type, odds, stake, status, potential_return, actual_return, notes, is_composite, created_at FROM bets ORDER BY created_at DESC")
             rows = cur.fetchall()
+            bets = []
             for row in rows:
                 row['odds'] = float(row['odds'])
                 row['stake'] = float(row['stake'])
                 row['potential_return'] = float(row['potential_return']) if row['potential_return'] else None
                 row['actual_return'] = float(row['actual_return']) if row['actual_return'] else None
                 row['created_at'] = row['created_at'].isoformat()
-            return [Bet(**row) for row in rows]
+                
+                if row['is_composite']:
+                    cur.execute("""
+                        SELECT id, bet_id, match_id, bet_type, odds, status, created_at 
+                        FROM bet_selections 
+                        WHERE bet_id = %s
+                    """, (row['id'],))
+                    selections = cur.fetchall()
+                    selections_data = []
+                    for sel in selections:
+                        sel['odds'] = float(sel['odds'])
+                        sel['created_at'] = sel['created_at'].isoformat()
+                        selections_data.append(BetSelection(**sel))
+                    row['selections'] = selections_data
+                
+                bets.append(Bet(**row))
+            return bets
 
 @app.get("/bets/{bet_id}", response_model=Bet)
 async def get_bet(bet_id: int):
     with get_conn() as conn:
         with conn.cursor() as cur:
-            cur.execute("SELECT id, match_id, bet_type, odds, stake, status, potential_return, actual_return, notes, created_at FROM bets WHERE id = %s", (bet_id,))
+            cur.execute("SELECT id, match_id, bet_type, odds, stake, status, potential_return, actual_return, notes, is_composite, created_at FROM bets WHERE id = %s", (bet_id,))
             row = cur.fetchone()
             if not row:
                 raise HTTPException(status_code=404, detail="Bet not found")
@@ -210,33 +292,90 @@ async def get_bet(bet_id: int):
             row['potential_return'] = float(row['potential_return']) if row['potential_return'] else None
             row['actual_return'] = float(row['actual_return']) if row['actual_return'] else None
             row['created_at'] = row['created_at'].isoformat()
+            
+            if row['is_composite']:
+                cur.execute("""
+                    SELECT id, bet_id, match_id, bet_type, odds, status, created_at 
+                    FROM bet_selections 
+                    WHERE bet_id = %s
+                """, (bet_id,))
+                selections = cur.fetchall()
+                selections_data = []
+                for sel in selections:
+                    sel['odds'] = float(sel['odds'])
+                    sel['created_at'] = sel['created_at'].isoformat()
+                    selections_data.append(BetSelection(**sel))
+                row['selections'] = selections_data
+            
             return Bet(**row)
 
 @app.put("/bets/{bet_id}", response_model=Bet)
 async def update_bet(bet_id: int, updated_bet: Bet):
     with get_conn() as conn:
         with conn.cursor() as cur:
-            potential_return = float(updated_bet.stake) * updated_bet.odds
-            actual_return = None
-            
-            if updated_bet.status == BetStatus.WON:
-                actual_return = potential_return
-            elif updated_bet.status == BetStatus.LOST:
-                actual_return = 0.0
-            elif updated_bet.status == BetStatus.VOID:
-                actual_return = float(updated_bet.stake)
-            
-            cur.execute("""
-                UPDATE bets 
-                SET match_id = %s, bet_type = %s, odds = %s, stake = %s, status = %s, 
-                    potential_return = %s, actual_return = %s, notes = %s
-                WHERE id = %s
-                RETURNING id, match_id, bet_type, odds, stake, status, potential_return, actual_return, notes, created_at
-            """, (updated_bet.match_id, updated_bet.bet_type, updated_bet.odds, updated_bet.stake, 
-                  updated_bet.status, potential_return, actual_return, updated_bet.notes, bet_id))
-            row = cur.fetchone()
-            if not row:
+            cur.execute("SELECT is_composite FROM bets WHERE id = %s", (bet_id,))
+            bet_row = cur.fetchone()
+            if not bet_row:
                 raise HTTPException(status_code=404, detail="Bet not found")
+            
+            is_composite = bet_row['is_composite']
+            
+            if is_composite:
+                cur.execute("""
+                    SELECT id, status FROM bet_selections WHERE bet_id = %s
+                """, (bet_id,))
+                selections = cur.fetchall()
+                
+                all_won = all(sel['status'] == BetStatus.WON for sel in selections)
+                any_lost = any(sel['status'] == BetStatus.LOST for sel in selections)
+                any_void = any(sel['status'] == BetStatus.VOID for sel in selections)
+                
+                if any_lost:
+                    bet_status = BetStatus.LOST
+                elif any_void:
+                    bet_status = BetStatus.VOID
+                elif all_won:
+                    bet_status = BetStatus.WON
+                else:
+                    bet_status = BetStatus.PENDING
+                
+                potential_return = float(updated_bet.stake) * updated_bet.odds
+                actual_return = None
+                
+                if bet_status == BetStatus.WON:
+                    actual_return = potential_return
+                elif bet_status == BetStatus.LOST:
+                    actual_return = 0.0
+                elif bet_status == BetStatus.VOID:
+                    actual_return = float(updated_bet.stake)
+                
+                cur.execute("""
+                    UPDATE bets 
+                    SET stake = %s, status = %s, potential_return = %s, actual_return = %s, notes = %s
+                    WHERE id = %s
+                    RETURNING id, match_id, bet_type, odds, stake, status, potential_return, actual_return, notes, is_composite, created_at
+                """, (updated_bet.stake, bet_status, potential_return, actual_return, updated_bet.notes, bet_id))
+            else:
+                potential_return = float(updated_bet.stake) * updated_bet.odds
+                actual_return = None
+                
+                if updated_bet.status == BetStatus.WON:
+                    actual_return = potential_return
+                elif updated_bet.status == BetStatus.LOST:
+                    actual_return = 0.0
+                elif updated_bet.status == BetStatus.VOID:
+                    actual_return = float(updated_bet.stake)
+                
+                cur.execute("""
+                    UPDATE bets 
+                    SET match_id = %s, bet_type = %s, odds = %s, stake = %s, status = %s, 
+                        potential_return = %s, actual_return = %s, notes = %s
+                    WHERE id = %s
+                    RETURNING id, match_id, bet_type, odds, stake, status, potential_return, actual_return, notes, is_composite, created_at
+                """, (updated_bet.match_id, updated_bet.bet_type, updated_bet.odds, updated_bet.stake, 
+                      updated_bet.status, potential_return, actual_return, updated_bet.notes, bet_id))
+            
+            row = cur.fetchone()
             conn.commit()
             
             row['odds'] = float(row['odds'])
@@ -244,7 +383,82 @@ async def update_bet(bet_id: int, updated_bet: Bet):
             row['potential_return'] = float(row['potential_return']) if row['potential_return'] else None
             row['actual_return'] = float(row['actual_return']) if row['actual_return'] else None
             row['created_at'] = row['created_at'].isoformat()
+            
+            if is_composite:
+                cur.execute("""
+                    SELECT id, bet_id, match_id, bet_type, odds, status, created_at 
+                    FROM bet_selections 
+                    WHERE bet_id = %s
+                """, (bet_id,))
+                selections = cur.fetchall()
+                selections_data = []
+                for sel in selections:
+                    sel['odds'] = float(sel['odds'])
+                    sel['created_at'] = sel['created_at'].isoformat()
+                    selections_data.append(BetSelection(**sel))
+                row['selections'] = selections_data
+            
             return Bet(**row)
+
+@app.put("/bet-selections/{selection_id}")
+async def update_bet_selection(selection_id: int, status: BetStatus):
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                UPDATE bet_selections 
+                SET status = %s
+                WHERE id = %s
+                RETURNING bet_id
+            """, (status, selection_id))
+            row = cur.fetchone()
+            if not row:
+                raise HTTPException(status_code=404, detail="Bet selection not found")
+            
+            bet_id = row['bet_id']
+            
+            cur.execute("""
+                SELECT id, status FROM bet_selections WHERE bet_id = %s
+            """, (bet_id,))
+            selections = cur.fetchall()
+            
+            all_won = all(sel['status'] == BetStatus.WON for sel in selections)
+            any_lost = any(sel['status'] == BetStatus.LOST for sel in selections)
+            any_void = any(sel['status'] == BetStatus.VOID for sel in selections)
+            
+            if any_lost:
+                bet_status = BetStatus.LOST
+            elif any_void:
+                bet_status = BetStatus.VOID
+            elif all_won:
+                bet_status = BetStatus.WON
+            else:
+                bet_status = BetStatus.PENDING
+            
+            cur.execute("""
+                SELECT stake, odds FROM bets WHERE id = %s
+            """, (bet_id,))
+            bet_row = cur.fetchone()
+            stake = float(bet_row['stake'])
+            odds = float(bet_row['odds'])
+            
+            potential_return = stake * odds
+            actual_return = None
+            
+            if bet_status == BetStatus.WON:
+                actual_return = potential_return
+            elif bet_status == BetStatus.LOST:
+                actual_return = 0.0
+            elif bet_status == BetStatus.VOID:
+                actual_return = stake
+            
+            cur.execute("""
+                UPDATE bets 
+                SET status = %s, actual_return = %s
+                WHERE id = %s
+            """, (bet_status, actual_return, bet_id))
+            
+            conn.commit()
+            return {"message": "Bet selection updated", "bet_id": bet_id, "new_bet_status": bet_status}
 
 @app.delete("/bets/{bet_id}")
 async def delete_bet(bet_id: int):

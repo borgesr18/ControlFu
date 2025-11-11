@@ -31,20 +31,41 @@ def init_db():
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS bets (
                     id SERIAL PRIMARY KEY,
-                    match_id INTEGER NOT NULL REFERENCES matches(id) ON DELETE CASCADE,
-                    bet_type TEXT NOT NULL,
+                    match_id INTEGER REFERENCES matches(id) ON DELETE CASCADE,
+                    bet_type TEXT,
                     odds NUMERIC(10,4) NOT NULL,
                     stake NUMERIC(12,2) NOT NULL,
                     status TEXT NOT NULL DEFAULT 'pending',
                     potential_return NUMERIC(12,2),
                     actual_return NUMERIC(12,2),
                     notes TEXT,
+                    is_composite BOOLEAN NOT NULL DEFAULT FALSE,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                )
+            """)
+            
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS bet_selections (
+                    id SERIAL PRIMARY KEY,
+                    bet_id INTEGER NOT NULL REFERENCES bets(id) ON DELETE CASCADE,
+                    match_id INTEGER NOT NULL REFERENCES matches(id) ON DELETE CASCADE,
+                    bet_type TEXT NOT NULL,
+                    odds NUMERIC(10,4) NOT NULL,
+                    status TEXT NOT NULL DEFAULT 'pending',
                     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
                 )
             """)
             
             cur.execute("""
                 CREATE INDEX IF NOT EXISTS idx_bets_match_id ON bets(match_id)
+            """)
+            
+            cur.execute("""
+                CREATE INDEX IF NOT EXISTS idx_bet_selections_bet_id ON bet_selections(bet_id)
+            """)
+            
+            cur.execute("""
+                CREATE INDEX IF NOT EXISTS idx_bet_selections_match_id ON bet_selections(match_id)
             """)
             
             conn.commit()
