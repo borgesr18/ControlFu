@@ -439,7 +439,7 @@ function App() {
         </div>
 
         <Tabs defaultValue="dashboard" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-4 bg-white p-2 rounded-xl shadow-md border border-gray-100 h-14">
+          <TabsList className="grid w-full grid-cols-5 bg-white p-2 rounded-xl shadow-md border border-gray-100 h-14">
             <TabsTrigger value="dashboard" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-500 data-[state=active]:to-indigo-500 data-[state=active]:text-white rounded-lg font-medium transition-all duration-300">
               Dashboard
             </TabsTrigger>
@@ -448,6 +448,9 @@ function App() {
             </TabsTrigger>
             <TabsTrigger value="bets" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-500 data-[state=active]:to-indigo-500 data-[state=active]:text-white rounded-lg font-medium transition-all duration-300">
               Apostas
+            </TabsTrigger>
+            <TabsTrigger value="history" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-500 data-[state=active]:to-indigo-500 data-[state=active]:text-white rounded-lg font-medium transition-all duration-300">
+              Histórico
             </TabsTrigger>
             <TabsTrigger value="statistics" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-500 data-[state=active]:to-indigo-500 data-[state=active]:text-white rounded-lg font-medium transition-all duration-300">
               Estatísticas
@@ -1016,7 +1019,7 @@ function App() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {bets.map((bet) => (
+                      {bets.filter(bet => bet.status === 'pending').map((bet) => (
                         <TableRow key={bet.id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors duration-200">
                           <TableCell className="text-gray-900 font-medium">
                             {bet.is_composite ? (
@@ -1119,6 +1122,70 @@ function App() {
                 </DialogFooter>
               </DialogContent>
             </Dialog>
+          </TabsContent>
+
+          <TabsContent value="history" className="space-y-6 animate-in fade-in duration-500">
+            <h2 className="text-2xl font-bold text-gray-900">Histórico de Apostas</h2>
+            
+            <Card className="bg-white border-0 shadow-lg overflow-hidden">
+              <CardContent className="p-0">
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-gradient-to-r from-gray-50 to-gray-100 border-b-2 border-gray-200">
+                        <TableHead className="text-gray-700 font-semibold">Partida(s)</TableHead>
+                        <TableHead className="text-gray-700 font-semibold">Tipo</TableHead>
+                        <TableHead className="text-gray-700 font-semibold">Odds</TableHead>
+                        <TableHead className="text-gray-700 font-semibold">Valor</TableHead>
+                        <TableHead className="text-gray-700 font-semibold">Retorno</TableHead>
+                        <TableHead className="text-gray-700 font-semibold">Status</TableHead>
+                        <TableHead className="text-gray-700 font-semibold">Data</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {bets.filter(bet => bet.status !== 'pending').map((bet) => (
+                        <TableRow key={bet.id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors duration-200">
+                          <TableCell className="text-gray-900 font-medium">
+                            {bet.is_composite ? (
+                              <div>
+                                <Badge className="bg-purple-100 text-purple-700 border-purple-200 mb-1">COMPOSTA</Badge>
+                                <div className="text-xs text-gray-600">
+                                  {bet.selections?.map((sel, idx) => (
+                                    <div key={idx}>{getMatchName(sel.match_id)}</div>
+                                  ))}
+                                </div>
+                              </div>
+                            ) : (
+                              getMatchName(bet.match_id!)
+                            )}
+                          </TableCell>
+                          <TableCell className="text-gray-700">
+                            {bet.is_composite ? (
+                              <div className="text-xs">
+                                {bet.selections?.map((sel, idx) => (
+                                  <div key={idx}>{betTypeLabels[sel.bet_type]}</div>
+                                ))}
+                              </div>
+                            ) : (
+                              betTypeLabels[bet.bet_type!]
+                            )}
+                          </TableCell>
+                          <TableCell className="text-gray-900 font-bold">{bet.odds.toFixed(2)}</TableCell>
+                          <TableCell className="text-gray-900 font-medium">R$ {bet.stake.toFixed(2)}</TableCell>
+                          <TableCell className={`font-bold ${bet.status === 'won' ? 'text-emerald-600' : bet.status === 'lost' ? 'text-rose-600' : 'text-gray-600'}`}>
+                            R$ {bet.actual_return?.toFixed(2) || '0.00'}
+                          </TableCell>
+                          <TableCell>{getStatusBadge(bet.status)}</TableCell>
+                          <TableCell className="text-gray-600 text-sm">
+                            {bet.created_at ? new Date(bet.created_at).toLocaleDateString('pt-BR') : '-'}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </CardContent>
+            </Card>
           </TabsContent>
 
           <TabsContent value="statistics" className="space-y-6 animate-in fade-in duration-500">
