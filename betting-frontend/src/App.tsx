@@ -73,12 +73,35 @@ function App() {
   const [selectedMatch, setSelectedMatch] = useState<Match | null>(null)
   const [selectedBet, setSelectedBet] = useState<Bet | null>(null)
 
+  const [newMatch, setNewMatch] = useState<Match>({
+    home_team: '',
+    away_team: '',
+    match_date: '',
+    status: 'scheduled',
+    league: ''
+  })
+
+  const [newBet, setNewBet] = useState<Bet>({
+    match_id: 0,
+    bet_type: 'home_win',
+    odds: 0,
+    stake: 0,
+    status: 'pending'
+  })
+
   useEffect(() => {
     const authStatus = sessionStorage.getItem('authenticated')
     if (authStatus === 'true') {
       setIsAuthenticated(true)
     }
   }, [])
+
+  useEffect(() => {
+    if (!isAuthenticated) return
+    fetchMatches()
+    fetchBets()
+    fetchStatistics()
+  }, [isAuthenticated])
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -144,28 +167,6 @@ function App() {
       </div>
     )
   }
-
-  const [newMatch, setNewMatch] = useState<Match>({
-    home_team: '',
-    away_team: '',
-    match_date: '',
-    status: 'scheduled',
-    league: ''
-  })
-
-  const [newBet, setNewBet] = useState<Bet>({
-    match_id: 0,
-    bet_type: 'home_win',
-    odds: 0,
-    stake: 0,
-    status: 'pending'
-  })
-
-  useEffect(() => {
-    fetchMatches()
-    fetchBets()
-    fetchStatistics()
-  }, [])
 
   const fetchMatches = async () => {
     try {
