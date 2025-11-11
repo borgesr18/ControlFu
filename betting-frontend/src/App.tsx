@@ -811,7 +811,7 @@ function App() {
                   <div className="grid gap-4 py-4">
                     <div className="grid gap-2">
                       <Label htmlFor="match_id" className="text-gray-700 font-medium">Partida</Label>
-                      <Select value={newBet.match_id.toString()} onValueChange={(value) => setNewBet({ ...newBet, match_id: parseInt(value) })}>
+                      <Select value={newBet.match_id?.toString() || ''} onValueChange={(value) => setNewBet({ ...newBet, match_id: parseInt(value) })}>
                         <SelectTrigger className="h-11 border-gray-300 focus:border-emerald-500 focus:ring-emerald-500">
                           <SelectValue placeholder="Selecione uma partida" />
                         </SelectTrigger>
@@ -826,7 +826,7 @@ function App() {
                     </div>
                     <div className="grid gap-2">
                       <Label htmlFor="bet_type" className="text-gray-700 font-medium">Tipo de Aposta</Label>
-                      <Select value={newBet.bet_type} onValueChange={(value) => setNewBet({ ...newBet, bet_type: value })}>
+                      <Select value={newBet.bet_type || ''} onValueChange={(value) => setNewBet({ ...newBet, bet_type: value })}>
                         <SelectTrigger className="h-11 border-gray-300 focus:border-emerald-500 focus:ring-emerald-500">
                           <SelectValue />
                         </SelectTrigger>
@@ -997,6 +997,7 @@ function App() {
                   </DialogFooter>
                 </DialogContent>
               </Dialog>
+              </div>
             </div>
 
             <Card className="bg-white border-0 shadow-lg overflow-hidden">
