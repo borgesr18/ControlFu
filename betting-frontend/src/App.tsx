@@ -9,7 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Badge } from '@/components/ui/badge'
 import { TrendingUp, TrendingDown, DollarSign, Target, Trophy, XCircle, Clock } from 'lucide-react'
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
+import { Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
