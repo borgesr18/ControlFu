@@ -8,10 +8,20 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Badge } from '@/components/ui/badge'
-import { TrendingUp, TrendingDown, DollarSign, Target, Trophy, XCircle, Clock } from 'lucide-react'
+import { TrendingUp, TrendingDown, DollarSign, Target, Trophy, XCircle, Clock, Lock, LogOut } from 'lucide-react'
 import { Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+
+const hashPassword = async (password: string): Promise<string> => {
+  const encoder = new TextEncoder()
+  const data = encoder.encode(password)
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data)
+  const hashArray = Array.from(new Uint8Array(hashBuffer))
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('')
+}
+
+const STORED_PASSWORD_HASH = '240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9'
 
 interface Match {
   id?: number
@@ -50,6 +60,9 @@ interface Statistics {
 }
 
 function App() {
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [loginPassword, setLoginPassword] = useState('')
+  const [loginError, setLoginError] = useState('')
   const [matches, setMatches] = useState<Match[]>([])
   const [bets, setBets] = useState<Bet[]>([])
   const [statistics, setStatistics] = useState<Statistics | null>(null)
@@ -59,6 +72,78 @@ function App() {
   const [isEditBetDialogOpen, setIsEditBetDialogOpen] = useState(false)
   const [selectedMatch, setSelectedMatch] = useState<Match | null>(null)
   const [selectedBet, setSelectedBet] = useState<Bet | null>(null)
+
+  useEffect(() => {
+    const authStatus = sessionStorage.getItem('authenticated')
+    if (authStatus === 'true') {
+      setIsAuthenticated(true)
+    }
+  }, [])
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setLoginError('')
+    
+    const hashedInput = await hashPassword(loginPassword)
+    
+    if (hashedInput === STORED_PASSWORD_HASH) {
+      setIsAuthenticated(true)
+      sessionStorage.setItem('authenticated', 'true')
+      setLoginPassword('')
+    } else {
+      setLoginError('Senha incorreta. Tente novamente.')
+      setLoginPassword('')
+    }
+  }
+
+  const handleLogout = () => {
+    setIsAuthenticated(false)
+    sessionStorage.removeItem('authenticated')
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4">
+        <Card className="w-full max-w-md bg-slate-800 border-slate-700">
+          <CardHeader className="space-y-1 text-center">
+            <div className="flex justify-center mb-4">
+              <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
+                <Lock className="w-8 h-8 text-white" />
+              </div>
+            </div>
+            <CardTitle className="text-2xl font-bold text-white">Sistema de Apostas</CardTitle>
+            <CardDescription className="text-slate-400">
+              Digite sua senha para acessar o sistema
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleLogin} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="password" className="text-slate-200">Senha</Label>
+                <Input
+                  id="password"
+                  type="password"
+                  value={loginPassword}
+                  onChange={(e) => setLoginPassword(e.target.value)}
+                  placeholder="Digite sua senha"
+                  className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-400"
+                  autoFocus
+                />
+              </div>
+              {loginError && (
+                <div className="text-red-400 text-sm bg-red-900/20 border border-red-800 rounded p-2">
+                  {loginError}
+                </div>
+              )}
+              <Button type="submit" className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700">
+                Entrar
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
 
   const [newMatch, setNewMatch] = useState<Match>({
     home_team: '',
@@ -244,9 +329,19 @@ function App() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
       <div className="container mx-auto p-6">
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold text-white mb-2">Sistema de Apostas Esportivas</h1>
-          <p className="text-slate-300">Controle completo das suas apostas de futebol</p>
+        <div className="mb-8 flex items-center justify-between">
+          <div>
+            <h1 className="text-4xl font-bold text-white mb-2">Sistema de Apostas Esportivas</h1>
+            <p className="text-slate-300">Controle completo das suas apostas de futebol</p>
+          </div>
+          <Button 
+            onClick={handleLogout}
+            variant="outline"
+            className="bg-slate-800 border-slate-600 text-slate-200 hover:bg-slate-700 hover:text-white"
+          >
+            <LogOut className="w-4 h-4 mr-2" />
+            Sair
+          </Button>
         </div>
 
         <Tabs defaultValue="dashboard" className="space-y-6">
