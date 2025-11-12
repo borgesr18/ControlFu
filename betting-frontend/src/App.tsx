@@ -89,6 +89,9 @@ function App() {
   const [compositeBetSelections, setCompositeBetSelections] = useState<BetSelection[]>([])
   const [compositeBetStake, setCompositeBetStake] = useState(0)
   const [compositeBetNotes, setCompositeBetNotes] = useState('')
+  const [isImportDialogOpen, setIsImportDialogOpen] = useState(false)
+  const [importDate, setImportDate] = useState(new Date().toISOString().split('T')[0])
+  const [importStatus, setImportStatus] = useState('')
 
   const [newMatch, setNewMatch] = useState<Match>({
     home_team: '',
@@ -268,6 +271,31 @@ function App() {
       }
     } catch (error) {
       console.error('Error deleting match:', error)
+    }
+  }
+
+  const importMatches = async () => {
+    setImportStatus('Importando partidas...')
+    try {
+      const response = await fetch(`${API_URL}/integrations/import-matches`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ date: importDate })
+      })
+      if (response.ok) {
+        const result = await response.json()
+        setImportStatus(`Importadas: ${result.inserted} | Atualizadas: ${result.updated} | Ignoradas: ${result.skipped}`)
+        fetchMatches()
+        setTimeout(() => {
+          setIsImportDialogOpen(false)
+          setImportStatus('')
+        }, 3000)
+      } else {
+        setImportStatus('Erro ao importar partidas')
+      }
+    } catch (error) {
+      console.error('Error importing matches:', error)
+      setImportStatus('Erro ao importar partidas')
     }
   }
 
@@ -598,13 +626,56 @@ function App() {
           <TabsContent value="matches" className="space-y-6 animate-in fade-in duration-500">
             <div className="flex justify-between items-center">
               <h2 className="text-2xl font-bold text-gray-900">Gerenciar Partidas</h2>
-              <Dialog open={isMatchDialogOpen} onOpenChange={setIsMatchDialogOpen}>
-                <DialogTrigger asChild>
-                  <Button className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg hover:shadow-xl transition-all duration-300 h-11 px-6 font-semibold">
-                    <Plus className="w-5 h-5 mr-2" />
-                    Nova Partida
-                  </Button>
-                </DialogTrigger>
+              <div className="flex gap-3">
+                <Dialog open={isImportDialogOpen} onOpenChange={setIsImportDialogOpen}>
+                  <DialogTrigger asChild>
+                    <Button className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 shadow-lg hover:shadow-xl transition-all duration-300 h-11 px-6 font-semibold">
+                      <Plus className="w-5 h-5 mr-2" />
+                      Importar Partidas
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="bg-white border-0 shadow-2xl max-w-md">
+                    <DialogHeader>
+                      <DialogTitle className="text-2xl font-bold text-gray-900">Importar Partidas</DialogTitle>
+                      <DialogDescription className="text-gray-600">
+                        Importar partidas do dia via API-Football
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="grid gap-4 py-4">
+                      <div className="grid gap-2">
+                        <Label htmlFor="import_date" className="text-gray-700 font-medium">Data</Label>
+                        <Input
+                          id="import_date"
+                          type="date"
+                          value={importDate}
+                          onChange={(e) => setImportDate(e.target.value)}
+                          className="h-11 border-gray-300 focus:border-green-500 focus:ring-green-500"
+                        />
+                      </div>
+                      {importStatus && (
+                        <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-gray-700">
+                          {importStatus}
+                        </div>
+                      )}
+                    </div>
+                    <DialogFooter>
+                      <Button 
+                        onClick={importMatches} 
+                        disabled={importStatus.includes('Importando')}
+                        className="w-full h-11 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 font-semibold disabled:opacity-50"
+                      >
+                        Importar
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+                <Dialog open={isMatchDialogOpen} onOpenChange={setIsMatchDialogOpen}>
+                  <DialogTrigger asChild>
+                    <Button className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg hover:shadow-xl transition-all duration-300 h-11 px-6 font-semibold">
+                      <Plus className="w-5 h-5 mr-2" />
+                      Nova Partida
+                    </Button>
+                  </DialogTrigger>
                 <DialogContent className="bg-white border-0 shadow-2xl max-w-md">
                   <DialogHeader>
                     <DialogTitle className="text-2xl font-bold text-gray-900">Criar Nova Partida</DialogTitle>
@@ -658,6 +729,7 @@ function App() {
                   </DialogFooter>
                 </DialogContent>
               </Dialog>
+              </div>
             </div>
 
             <Card className="bg-white border-0 shadow-lg overflow-hidden">

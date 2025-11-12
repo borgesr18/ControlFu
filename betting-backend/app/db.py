@@ -24,8 +24,24 @@ def init_db():
                     away_score INTEGER,
                     match_date TIMESTAMPTZ NOT NULL,
                     status TEXT NOT NULL,
-                    league TEXT NOT NULL
+                    league TEXT NOT NULL,
+                    external_id TEXT,
+                    season INTEGER,
+                    country TEXT,
+                    venue TEXT,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
                 )
+            """)
+            
+            cur.execute("""
+                DO $$ 
+                BEGIN
+                    IF NOT EXISTS (
+                        SELECT 1 FROM pg_constraint WHERE conname = 'matches_external_id_key'
+                    ) THEN
+                        ALTER TABLE matches ADD CONSTRAINT matches_external_id_key UNIQUE (external_id);
+                    END IF;
+                END $$;
             """)
             
             cur.execute("""

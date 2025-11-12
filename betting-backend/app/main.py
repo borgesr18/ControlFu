@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Header
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, List
@@ -8,6 +8,8 @@ from contextlib import asynccontextmanager
 from dotenv import load_dotenv
 from decimal import Decimal
 from app.db import init_db, get_conn, DATABASE_URL
+import httpx
+import os
 
 load_dotenv()
 
@@ -509,3 +511,151 @@ async def get_statistics():
                 win_rate=win_rate,
                 roi=roi
             )
+
+class ImportMatchesRequest(BaseModel):
+    date: str
+    leagues: Optional[List[int]] = None
+
+class ImportMatchesResponse(BaseModel):
+    inserted: int
+    updated: int
+    skipped: int
+    errors: List[str]
+
+LEAGUE_IDS = {
+    'brasileirao_a': 71,
+    'brasileirao_b': 72,
+    'copa_do_brasil': 73,
+    'premier_league': 39,
+    'la_liga': 140,
+    'serie_a': 135,
+    'bundesliga': 78,
+    'ligue_1': 61,
+    'champions_league': 2,
+    'europa_league': 3,
+    'libertadores': 13,
+    'sul_americana': 11,
+    'liga_portugal': 94,
+    'eredivisie': 88,
+    'championship': 40
+}
+
+def map_api_status_to_internal(api_status: str) -> str:
+    status_map = {
+        'TBD': 'scheduled',
+        'NS': 'scheduled',
+        '1H': 'live',
+        'HT': 'live',
+        '2H': 'live',
+        'ET': 'live',
+        'P': 'live',
+        'FT': 'finished',
+        'AET': 'finished',
+        'PEN': 'finished',
+        'PST': 'cancelled',
+        'CANC': 'cancelled',
+        'SUSP': 'cancelled',
+        'ABD': 'cancelled',
+        'WO': 'cancelled',
+        'AWD': 'cancelled'
+    }
+    return status_map.get(api_status, 'scheduled')
+
+@app.post("/integrations/import-matches", response_model=ImportMatchesResponse)
+async def import_matches(
+    request: ImportMatchesRequest,
+    x_import_secret: Optional[str] = Header(None)
+):
+    import_secret = os.getenv("IMPORT_SECRET")
+    if import_secret and x_import_secret != import_secret:
+        raise HTTPException(status_code=403, detail="Invalid import secret")
+    
+    api_key = os.getenv("API_FOOTBALL_KEY")
+    if not api_key:
+        raise HTTPException(status_code=500, detail="API_FOOTBALL_KEY not configured")
+    
+    leagues_to_import = request.leagues or list(LEAGUE_IDS.values())
+    
+    inserted = 0
+    updated = 0
+    skipped = 0
+    errors = []
+    
+    async with httpx.AsyncClient() as client:
+        for league_id in leagues_to_import:
+            try:
+                response = await client.get(
+                    "https://v3.football.api-sports.io/fixtures",
+                    headers={"x-apisports-key": api_key},
+                    params={
+                        "date": request.date,
+                        "league": league_id,
+                        "season": 2024,
+                        "timezone": "America/Sao_Paulo"
+                    },
+                    timeout=30.0
+                )
+                
+                if response.status_code != 200:
+                    errors.append(f"League {league_id}: API returned {response.status_code}")
+                    continue
+                
+                data = response.json()
+                fixtures = data.get("response", [])
+                
+                with get_conn() as conn:
+                    with conn.cursor() as cur:
+                        for fixture in fixtures:
+                            try:
+                                external_id = str(fixture["fixture"]["id"])
+                                home_team = fixture["teams"]["home"]["name"]
+                                away_team = fixture["teams"]["away"]["name"]
+                                match_date = fixture["fixture"]["date"]
+                                status = map_api_status_to_internal(fixture["fixture"]["status"]["short"])
+                                league_name = fixture["league"]["name"]
+                                country = fixture["league"]["country"]
+                                season = fixture["league"]["season"]
+                                venue = fixture["fixture"]["venue"]["name"] if fixture["fixture"]["venue"] else None
+                                home_score = fixture["goals"]["home"]
+                                away_score = fixture["goals"]["away"]
+                                
+                                cur.execute("""
+                                    SELECT id FROM matches WHERE external_id = %s
+                                """, (external_id,))
+                                existing = cur.fetchone()
+                                
+                                if existing:
+                                    cur.execute("""
+                                        UPDATE matches 
+                                        SET home_team = %s, away_team = %s, match_date = %s, 
+                                            status = %s, league = %s, country = %s, season = %s,
+                                            venue = %s, home_score = %s, away_score = %s
+                                        WHERE external_id = %s
+                                    """, (home_team, away_team, match_date, status, league_name,
+                                          country, season, venue, home_score, away_score, external_id))
+                                    updated += 1
+                                else:
+                                    cur.execute("""
+                                        INSERT INTO matches 
+                                        (home_team, away_team, match_date, status, league, 
+                                         external_id, country, season, venue, home_score, away_score)
+                                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                                    """, (home_team, away_team, match_date, status, league_name,
+                                          external_id, country, season, venue, home_score, away_score))
+                                    inserted += 1
+                                
+                            except Exception as e:
+                                errors.append(f"Fixture {fixture.get('fixture', {}).get('id', 'unknown')}: {str(e)}")
+                                skipped += 1
+                        
+                        conn.commit()
+                
+            except Exception as e:
+                errors.append(f"League {league_id}: {str(e)}")
+    
+    return ImportMatchesResponse(
+        inserted=inserted,
+        updated=updated,
+        skipped=skipped,
+        errors=errors
+    )
