@@ -37,6 +37,41 @@ def init_db():
                 DO $$ 
                 BEGIN
                     IF NOT EXISTS (
+                        SELECT 1 FROM information_schema.columns 
+                        WHERE table_name = 'matches' AND column_name = 'external_id'
+                    ) THEN
+                        ALTER TABLE matches ADD COLUMN external_id TEXT;
+                    END IF;
+                    
+                    IF NOT EXISTS (
+                        SELECT 1 FROM information_schema.columns 
+                        WHERE table_name = 'matches' AND column_name = 'season'
+                    ) THEN
+                        ALTER TABLE matches ADD COLUMN season INTEGER;
+                    END IF;
+                    
+                    IF NOT EXISTS (
+                        SELECT 1 FROM information_schema.columns 
+                        WHERE table_name = 'matches' AND column_name = 'country'
+                    ) THEN
+                        ALTER TABLE matches ADD COLUMN country TEXT;
+                    END IF;
+                    
+                    IF NOT EXISTS (
+                        SELECT 1 FROM information_schema.columns 
+                        WHERE table_name = 'matches' AND column_name = 'venue'
+                    ) THEN
+                        ALTER TABLE matches ADD COLUMN venue TEXT;
+                    END IF;
+                    
+                    IF NOT EXISTS (
+                        SELECT 1 FROM information_schema.columns 
+                        WHERE table_name = 'matches' AND column_name = 'created_at'
+                    ) THEN
+                        ALTER TABLE matches ADD COLUMN created_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+                    END IF;
+                    
+                    IF NOT EXISTS (
                         SELECT 1 FROM pg_constraint WHERE conname = 'matches_external_id_key'
                     ) THEN
                         ALTER TABLE matches ADD CONSTRAINT matches_external_id_key UNIQUE (external_id);
